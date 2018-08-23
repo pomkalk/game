@@ -1,0 +1,27 @@
+{
+  "name": "phaser3-demo",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "webpack",
+    "dev": "npm run build && webpack-dev-server --port=8000 --open",
+    "server": "nodemon server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "nodemon": "^1.18.3",
+    "webpack": "^4.16.5",
+    "webpack-cli": "^3.1.0",
+    "webpack-dev-server": "^3.1.5"
+  },
+  "dependencies": {
+    "canvas-prebuilt": "^1.6.5-prerelease.1",
+    "express": "^4.16.3",
+    "jsdom": "^12.0.0",
+    "phaser": "^3.11.0",
+    "socket.io": "^2.1.1"
+  }
+}

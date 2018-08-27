@@ -2,75 +2,83 @@ var express = require('express')
 var app = express()
 var http = require('http').Server(app)
 var io = require('socket.io')(http)
+var Matter = require('matter-js')
+
+app.use(express.static('./static'))
+
+global.document = {
+  createElement: function () {
+    // Canvas
+    return {
+      getContext: function () {
+        return {};
+      }
+    };
+  }
+};
+global.window = {};
+
+var engine = Matter.Engine.create()
+
+var w1 = Matter.Bodies.rectangle(400, -25, 900, 50, {isStatic: true})
+var w2 = Matter.Bodies.rectangle(400, 625, 900, 50, {isStatic: true})
+var w3 = Matter.Bodies.rectangle(-25, 300, 50, 700, {isStatic: true})
+var w4 = Matter.Bodies.rectangle(825, 300, 50, 700, {isStatic: true})
 
 
-var fps = 1000 / 60
-var users_iter = 1
-var users = {}
+var balls = []
 
-
-function rnd(min, max) {
-  return Math.random() * (max - min) + min
+function randomIntFromInterval(min, max) {
+  return Math.floor(Math.random() * (max - min + 1) + min);
 }
 
-function getUserId () {
-  return '#' + users_iter++
-}
+var ball_types = ['basketball', 'bowling']
+Matter.World.add(engine.world, [w1, w2, w3, w4])
+var users_online = 0
+Matter.Events.on(engine, 'afterUpdate', () => {
+  var data = []
+  balls.forEach(body => {
+    data.push({ id: '#' + body.id, position: body.position, angle: body.angle, type: body.label})
+  })
+  io.emit('updates', data)
+})
 
 io.on('connect', (socket) => {
   console.log('connected')
+  users_online++
+  io.emit('users', users_online)
   socket.on('disconnect', () => { 
     console.log('disconnected')
-    delete users[socket.user_id]
-    io.emit('user_delete', socket.user_id)
+    users_online--
+    io.emit('users', users_online)
   })
-  socket.user_id = getUserId()
-  var user = {
-    id: socket.user_id,
-    color: '0x' + Math.floor(Math.random() * 16777215).toString(16),
-    position: {
-      x: rnd(50, 750),
-      y: rnd(50, 550)
-    },
-    keys: {
-      up: false,
-      down: false,
-      left: false,
-      right: false
+  socket.on('add', (pos) => {
+
+    var ball = Matter.Bodies.circle(pos.x, pos.y, 30)
+    ball.label = ball_types[randomIntFromInterval(0, 1)]
+    ball.restitution = 0.7
+    if (ball.label == 'bowling') {
+      ball.mass = 5
+      ball.restitution = 0.2
     }
-  }
-  users[socket.user_id] = user
-  socket.on('key_pressed', ({user_id, key}) => {
-    users[user_id].keys[key] = true
+    balls.push(ball)
+    Matter.World.add(engine.world, [ball])
+
+    if (balls.length > 100) {
+      Matter.World.clear(engine.world, true)
+      balls = []
+      io.emit('clear')
+    }
   })
-  socket.on('key_unpressed', ({user_id, key}) => {
-    users[user_id].keys[key] = false
-  })  
-  socket.emit('welcome', user)
 })
 
-http.listen(3030, ()=> {
+http.listen(8000, ()=> {
+  Matter.Engine.run(engine)
+  //Matter.Engine.update(engine, 1000 / 60)
   console.log('Server started')
-  setInterval(gameLoop, fps)
+  // setInterval(()=> {
+  //   Matter.World.clear(engine.world, true)
+  //   balls = []
+  //   io.emit('clear')
+  // }, 5000)
 })
-
-function gameLoop() {
-  calculate()
-  sendUpdates()
-}
-
-var speed = 3
-function calculate () {
-  Object.keys(users).forEach(user_id => {
-    var user = users[user_id]
-    if (user.keys.up) user.position.y -= speed
-    if (user.keys.down) user.position.y += speed
-    if (user.keys.left) user.position.x -= speed
-    if (user.keys.right) user.position.x += speed
-  })
-}
-
-function sendUpdates () {
-  io.emit('updates', users)
-}
-
